@@ -8,20 +8,21 @@ object PingSupervisor {
 
   case class PingMessage(id: String, payload: Any)
 
-  val props = Props(new PingSupervisor)
+  def props(ids: Seq[String]) = Props(new PingSupervisor(ids))
 
   val name = "ping-supervisor"
-
 }
 
-class PingSupervisor extends Actor {
+class PingSupervisor(ids: Seq[String]) extends Actor {
+
+  var i = 0
 
   val extractor: ShardRegion.ExtractEntityId = {
     case PingMessage(id, msg) => id -> msg
   }
 
   val shardResolver: ShardRegion.ExtractShardId = {
-    case PingMessage(id, msg) => id(0).toString
+    case PingMessage(id, _) => (Math.abs(id.hashCode) % 10 * 2).toString
   }
 
   val pingRegion = ClusterSharding(context.system).start(
@@ -33,6 +34,8 @@ class PingSupervisor extends Actor {
   )
 
   override def receive: Receive = {
-    case msg: String => pingRegion forward PingMessage(msg, msg)
+    case msg: String =>
+      pingRegion forward PingMessage(ids(i % ids.size), msg)
+      i += 1
   }
 }
